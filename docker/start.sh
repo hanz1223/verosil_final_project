@@ -8,12 +8,12 @@ sed -i "s/:80/:${PORT_TO_USE}/" /etc/apache2/sites-available/*.conf
 
 # Laravel configuration and setup
 php artisan storage:link || true
-
+php artisan db:seed || true
 # Run migrations FIRST, then seed
 php artisan migrate --force || true
-php artisan db:seed || true
 
-php artisan optimize
+
+php artisan optimize || true
 
 # Execute Apache in the foreground replacing the shell process (PID 1)
 exec apache2-foreground
