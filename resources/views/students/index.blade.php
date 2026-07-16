@@ -128,23 +128,41 @@
                     return meta ? meta.getAttribute('content') : '';
                 };
 
-                function getRowHtml(data) {
-                    const yearLevel = data.year_level_label || data.year_level || '';
+                // Kukuha ng umiiral na datos sa DOM kung may kulang na detalye sa broadcast payload
+                function getRowHtml(data, existingRow = null) {
+                    const id = data.id || (existingRow ? existingRow.id.replace('student-row-', '') : '');
+                    const firstName = data.first_name || (existingRow ? existingRow.querySelector('.row-first-name')?.textContent.trim() : '') || '';
+                    const lastName = data.last_name || (existingRow ? existingRow.querySelector('.row-last-name')?.textContent.trim() : '') || '';
+                    const email = data.email || (existingRow ? existingRow.querySelector('.row-email')?.textContent.trim() : '') || '';
+                    const studentNumber = data.student_number || (existingRow ? existingRow.querySelector('.row-student-number')?.textContent.trim() : '') || '';
+                    const course = data.course || (existingRow ? existingRow.querySelector('.row-course')?.textContent.trim() : '') || '';
+                    
+                    // Ligtas na paghawak sa Year Level labels at integers
+                    let yearLevel = '';
+                    if (data.year_level_label) {
+                        yearLevel = data.year_level_label;
+                    } else if (data.year_level) {
+                        const labels = { 1: '1st Year', 2: '2nd Year', 3: '3rd Year', 4: '4th Year' };
+                        yearLevel = labels[data.year_level] || `${data.year_level} Year`;
+                    } else if (existingRow) {
+                        yearLevel = existingRow.querySelector('.row-year-level')?.textContent.trim() || '';
+                    }
+
                     return `
-                        <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap row-first-name">${data.first_name || ''}</td>
-                        <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap row-last-name">${data.last_name || ''}</td>
-                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap row-email">${data.email || ''}</td>
+                        <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap row-first-name">${firstName}</td>
+                        <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap row-last-name">${lastName}</td>
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap row-email">${email}</td>
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono text-xs row-student-number">${data.student_number || ''}</span>
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono text-xs row-student-number">${studentNumber}</span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold row-year-level">${yearLevel}</span>
                         </td>
-                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap row-course">${data.course || ''}</td>
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap row-course">${course}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">
                             <div class="inline-flex items-center gap-2">
-                                <a href="/students/${data.id}/edit" class="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Edit</a>
-                                <form method="POST" action="/students/${data.id}" onsubmit="return confirm('Are you sure you want to delete this student?');">
+                                <a href="/students/${id}/edit" class="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Edit</a>
+                                <form method="POST" action="/students/${id}" onsubmit="return confirm('Are you sure you want to delete this student?');">
                                     <input type="hidden" name="_token" value="${getCsrfToken()}">
                                     <input type="hidden" name="_method" value="DELETE">
                                     <button type="submit" class="inline-flex items-center px-3 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition">Delete</button>
@@ -166,48 +184,23 @@
                     }
                 }
 
-                // 1. LISTEN FOR CREATE
-                channel.listen('.student.created', (payload) => {
-                    const data = payload.student ? payload.student : payload;
-                    if (!data || !data.id) return;
-
-                    // Siguraduhing walang kalat o duplicate row
-                    const existingRow = document.getElementById(`student-row-${data.id}`);
-                    if (existingRow) {
-                        existingRow.innerHTML = getRowHtml(data);
-                        return;
-                    }
-
-                    const noStudentsRow = document.getElementById('no-students-row');
-                    if (noStudentsRow) noStudentsRow.remove();
-
-                    const tableBody = document.getElementById('student-table');
-                    if (tableBody) {
-                        const newRow = document.createElement('tr');
-                        newRow.id = `student-row-${data.id}`;
-                        newRow.className = "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-100 dark:border-gray-700/80";
-                        newRow.innerHTML = getRowHtml(data);
-                        tableBody.insertBefore(newRow, tableBody.firstChild);
-
-                        showAlert(`A new student (<strong>${data.first_name} ${data.last_name}</strong>) has been added in real-time!`);
-                    }
-                });
-
-                // 2. LISTEN FOR UPDATE (Flexible Resolver)
-                channel.listen('.student.updated', (payload) => {
-                    const data = payload.student ? payload.student : payload;
+                // UNIFIED UPSERT ENGINE: Pinipigilan ang duplicate anuman ang pagkakasunod-sunod ng mga kaganapan (events)
+                function upsertStudentRow(data, isNewCreation = false) {
                     if (!data || !data.id) return;
 
                     const existingRow = document.getElementById(`student-row-${data.id}`);
                     if (existingRow) {
-                        existingRow.innerHTML = getRowHtml(data);
+                        // Kung may nakitang katugmang row, i-update lang ito gamit ang bagong datos
+                        existingRow.innerHTML = getRowHtml(data, existingRow);
                         
                         existingRow.classList.add('bg-yellow-50', 'dark:bg-yellow-900/20');
                         setTimeout(() => existingRow.classList.remove('bg-yellow-50', 'dark:bg-yellow-900/20'), 2000);
 
-                        showAlert(`Student record for <strong>${data.first_name} ${data.last_name}</strong> was updated in real-time!`, 'bg-amber-50 dark:bg-amber-900/30', 'border-amber-200 dark:border-amber-800', 'text-amber-700 dark:text-amber-300');
+                        if (!isNewCreation) {
+                            showAlert(`Student record for <strong>${data.first_name || ''} ${data.last_name || ''}</strong> was updated in real-time!`, 'bg-amber-50 dark:bg-amber-900/30', 'border-amber-200 dark:border-amber-800', 'text-amber-700 dark:text-amber-300');
+                        }
                     } else {
-                        // Kung wala pa, mag-insert (Safe Insertion Engine)
+                        // Kung bago talaga ang ID, i-insert ito sa pinakaunang posisyon sa listahan
                         const tableBody = document.getElementById('student-table');
                         if (tableBody) {
                             const noStudentsRow = document.getElementById('no-students-row');
@@ -218,13 +211,28 @@
                             newRow.className = "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-100 dark:border-gray-700/80";
                             newRow.innerHTML = getRowHtml(data);
                             tableBody.insertBefore(newRow, tableBody.firstChild);
+
+                            if (isNewCreation) {
+                                showAlert(`A new student (<strong>${data.first_name || ''} ${data.last_name || ''}</strong>) has been added in real-time!`);
+                            }
                         }
                     }
+                }
+
+                // 1. LISTEN FOR CREATE
+                channel.listen('.student.created', (payload) => {
+                    const data = payload.student ? payload.student : payload;
+                    upsertStudentRow(data, true);
                 });
 
-                // 3. LISTEN FOR DELETE (Lahat ng variation ng Payload structure ay kayang basahin)
+                // 2. LISTEN FOR UPDATE
+                channel.listen('.student.updated', (payload) => {
+                    const data = payload.student ? payload.student : payload;
+                    upsertStudentRow(data, false);
+                });
+
+                // 3. LISTEN FOR DELETE
                 channel.listen('.student.deleted', (payload) => {
-                    // Kinukuha nito ang ID kahit `payload.id`, `payload.student.id`, o `payload.student` lang ang pinadala ng Laravel Event
                     const studentId = payload.id !== undefined ? payload.id : (payload.student && payload.student.id ? payload.student.id : (typeof payload === 'object' && payload.student ? payload.student : null));
                     
                     if (studentId) {
